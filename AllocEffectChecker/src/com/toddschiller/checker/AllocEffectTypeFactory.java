@@ -16,7 +16,6 @@ import org.checkerframework.framework.type.AnnotatedTypeMirror;
 import org.checkerframework.framework.type.ListTreeAnnotator;
 import org.checkerframework.framework.type.TreeAnnotator;
 
-import com.sun.source.tree.MethodTree;
 import com.sun.source.tree.Tree;
 import com.toddschiller.checker.qual.EffectType;
 import com.toddschiller.checker.qual.MayAlloc;
@@ -85,8 +84,8 @@ public class AllocEffectTypeFactory extends BaseAnnotatedTypeFactory {
         return (r != null ? Effect.min(r.min, r.max) : new Effect(MayAlloc.class));
     }
 
-    // Only the visitMethod call should pass true for warnings
     public Effect.EffectRange findInheritedEffectRange(TypeElement declaringType, ExecutableElement overridingMethod) {
+        // Only the visitMethod call should pass true for warnings
         return findInheritedEffectRange(declaringType, overridingMethod, false, null);
     }
 
@@ -108,13 +107,13 @@ public class AllocEffectTypeFactory extends BaseAnnotatedTypeFactory {
                 Effect eff = getDeclaredEffect(overrides);
                 assert (eff != null);
                 if (eff.noAlloc()) {
-                    // found a safe override
+                    // found a no_alloc override
                     safe_override = overrides;
                     if (isAlloc && issueConflictWarning)
                         checker.report(Result.failure("override.effect.invalid", overridingMethod, declaringType,
                                 safe_override, superclass), errorNode);
                 } else if (eff.mayAlloc()) {
-                    // found an alloc override
+                    // found an may_alloc override
                     alloc_override = overrides;
                 } else {
                     assert false;
@@ -130,13 +129,13 @@ public class AllocEffectTypeFactory extends BaseAnnotatedTypeFactory {
             if (overrides != null) {
                 Effect eff = getDeclaredEffect(overrides);
                 if (eff.noAlloc()) {
-                    // found a safe override
+                    // found a no_alloc override
                     safe_override = overrides;
                     if (isAlloc && issueConflictWarning)
                         checker.report(Result.failure("override.effect.invalid", overridingMethod, declaringType,
                                 safe_override, ty), errorNode);
                 } else if (eff.noAlloc()) {
-                    // found a ui override
+                    // found a may_alloc override
                     alloc_override = overrides;
                 } else {
                     assert false;
@@ -157,10 +156,11 @@ public class AllocEffectTypeFactory extends BaseAnnotatedTypeFactory {
         Effect max = (alloc_override != null ? new Effect(MayAlloc.class) : (safe_override != null ? new Effect(
                 NoAlloc.class) : null));
 
-        if (debugSpew)
+        if (debugSpew){
             System.err.println("Found " + declaringType + "." + overridingMethod + " to have inheritance pair (" + min
                     + "," + max + ")");
-
+        }
+            
         if (min == null && max == null){
             return null;
         }else{
@@ -169,38 +169,11 @@ public class AllocEffectTypeFactory extends BaseAnnotatedTypeFactory {
     }
 
     private class AllocEffectsTreeAnnotator extends TreeAnnotator {
-
+        // We don't need to annotate the tree with type annotations because the EffectType
+        // is the default annotation.
+        
         public AllocEffectsTreeAnnotator() {
             super(AllocEffectTypeFactory.this);
-        }
-
-        public boolean hasExplicitAllocEffect(ExecutableElement methElt) {
-            return AllocEffectTypeFactory.this.getDeclAnnotation(methElt, MayAlloc.class) != null;
-        }
-
-        public boolean hasExplicitSafeEffect(ExecutableElement methElt) {
-            return AllocEffectTypeFactory.this.getDeclAnnotation(methElt, NoAlloc.class) != null;
-        }
-
-        public boolean hasExplicitEffect(ExecutableElement methElt) {
-            return hasExplicitAllocEffect(methElt) || hasExplicitSafeEffect(methElt);
-        }
-
-        @Override
-        public Void visitMethod(MethodTree node, AnnotatedTypeMirror type) {
-            AnnotatedTypeMirror.AnnotatedExecutableType methType = (AnnotatedTypeMirror.AnnotatedExecutableType) type;
-            Effect e = getDeclaredEffect(methType.getElement());
-            
-            if (!hasExplicitEffect(methType.getElement())) {
-                // TODO: This line does nothing!
-                // AnnotatedTypeMirror.addAnnotation silently ignores
-                // non-qualifier annotations!
-                // We should be digging up the /declaration/ of the method, and
-                // annotating that.
-                methType.addAnnotation(e.getAnnotation());
-            }
-            
-            return super.visitMethod(node, type);
         }
     }
 }

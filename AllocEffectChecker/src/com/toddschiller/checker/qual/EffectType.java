@@ -14,9 +14,10 @@ import org.checkerframework.framework.qual.TypeQualifier;
 import com.sun.source.tree.Tree;
 
 /**
- * A type annotation to be picked up by the Checker Framework. If we wanted to support
- * effect polymorphism, we'd need type annotations for each effect, e.g., <tt>NoAllocType</tt>
- * and <tt>MayAllocType</tt>.
+ * A type annotation to be picked up by the Checker Framework. If we wanted to
+ * support effect polymorphism, we'd need type annotations for each effect,
+ * e.g., <tt>NoAllocType</tt> and <tt>MayAllocType</tt>.
+ * 
  * @author Todd Schiller
  */
 @TypeQualifier
@@ -27,5 +28,4 @@ import com.sun.source.tree.Tree;
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ ElementType.TYPE_USE, ElementType.TYPE_PARAMETER })
 public @interface EffectType {
-
 }

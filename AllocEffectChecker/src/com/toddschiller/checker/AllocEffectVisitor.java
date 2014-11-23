@@ -1,7 +1,5 @@
 package com.toddschiller.checker;
 
-import java.util.Stack;
-
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.TypeElement;
@@ -13,8 +11,6 @@ import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedDeclared
 import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedExecutableType;
 import org.checkerframework.javacutil.TreeUtils;
 
-import com.sun.source.tree.ClassTree;
-import com.sun.source.tree.MemberSelectTree;
 import com.sun.source.tree.MethodInvocationTree;
 import com.sun.source.tree.MethodTree;
 import com.sun.source.tree.NewArrayTree;
@@ -35,19 +31,14 @@ public final class AllocEffectVisitor extends BaseTypeVisitor<AllocEffectTypeFac
 
     private final boolean debugSpew;
 
-    private final Stack<Effect> effects;
-    private final Stack<MethodTree> methods;
-
     public AllocEffectVisitor(BaseTypeChecker checker) {
         super(checker);
 
         debugSpew = checker.getLintOption("debugSpew", false);
 
-        if (debugSpew)
+        if (debugSpew){
             System.err.println("Running AllocEffectChecker");
-
-        effects = new Stack<Effect>();
-        methods = new Stack<MethodTree>();
+        }
     }
 
     @Override
@@ -58,7 +49,6 @@ public final class AllocEffectVisitor extends BaseTypeVisitor<AllocEffectTypeFac
     @Override
     public boolean isValidUse(AnnotatedDeclaredType declarationType, AnnotatedDeclaredType useType, Tree tree) {
         // In our basic effect system, we're only checking method annotations
-        
         return true;
     }
 
@@ -68,42 +58,36 @@ public final class AllocEffectVisitor extends BaseTypeVisitor<AllocEffectTypeFac
 
         // Method override validity is checked manually by the type factory
         // during visitation
-
         return true;
     }
 
+    /**
+     * Emit an error if {@code targerEffect} is a supertype of {@code callerEffect}.
+     */
     private void checkEffect(Effect callerEffect, Effect targetEffect, Tree node) {
-
         if (debugSpew) {
             System.err.println("Caller effect: " + callerEffect + " Target effect: " + targetEffect);
         }
 
         if (targetEffect.compareTo(callerEffect) > 0) {
+            // The target effect is a supertype of the effect of the enclosing method
             checker.report(Result.failure("call.invalid.alloc", targetEffect, callerEffect), node);
         }
     }
 
     @Override
     public Void visitMethodInvocation(MethodInvocationTree node, Void p) {
-        if (debugSpew) {
-            System.err.println("For invocation " + node + " in " + methods.peek().getName());
-        }
-
-        ExecutableElement methodElt = TreeUtils.elementFromUse(node);
-
         MethodTree callerTree = TreeUtils.enclosingMethod(getCurrentPath());
 
-        if (callerTree == null) {
-            // XXX: static initializer; need to check for the Alloc effect
-            return super.visitMethodInvocation(node, p);
+        if (debugSpew) {
+            System.err.println("For invocation " + node + " in " + callerTree.getName());
         }
-
+       
         ExecutableElement callerElt = TreeUtils.elementFromDeclaration(callerTree);
-        Effect targetEffect = atypeFactory.getDeclaredEffect(methodElt);
-
-        // Sanity check for the caller effect
         Effect callerEffect = atypeFactory.getDeclaredEffect(callerElt);
-        assert (callerEffect.equals(effects.peek()));
+       
+        ExecutableElement targetElt = TreeUtils.elementFromUse(node);
+        Effect targetEffect = atypeFactory.getDeclaredEffect(targetElt);
 
         checkEffect(callerEffect, targetEffect, node);
 
@@ -112,23 +96,16 @@ public final class AllocEffectVisitor extends BaseTypeVisitor<AllocEffectTypeFac
 
     @Override
     public Void visitNewArray(NewArrayTree node, Void p) {
+        MethodTree callerTree = TreeUtils.enclosingMethod(getCurrentPath());
+      
         if (debugSpew) {
-            System.err.println("For new array " + node + " in " + methods.peek().getName());
+            System.err.println("For new array " + node + " in " + callerTree.getName());
         }
+
+        ExecutableElement callerElt = TreeUtils.elementFromDeclaration(callerTree);
+        Effect callerEffect = atypeFactory.getDeclaredEffect(callerElt);
 
         Effect targetEffect = new Effect(MayAlloc.class);
-
-        MethodTree callerTree = TreeUtils.enclosingMethod(getCurrentPath());
-        ExecutableElement callerElt = TreeUtils.elementFromDeclaration(callerTree);
-
-        if (callerTree == null) {
-            // XXX: static initializer; need to check for the Alloc effect
-            return super.visitNewArray(node, p);
-        }
-
-        // Sanity check for the caller effect
-        Effect callerEffect = atypeFactory.getDeclaredEffect(callerElt);
-        assert (callerEffect.equals(effects.peek()));
 
         checkEffect(callerEffect, targetEffect, node);
 
@@ -137,25 +114,17 @@ public final class AllocEffectVisitor extends BaseTypeVisitor<AllocEffectTypeFac
 
     @Override
     protected boolean checkConstructorInvocation(AnnotatedDeclaredType dt, AnnotatedExecutableType constructor, Tree src) {
-
+        MethodTree callerTree = TreeUtils.enclosingMethod(getCurrentPath());
+        
         if (debugSpew) {
-            System.err.println("For constructor " + src + " in " + methods.peek().getName());
+            System.err.println("For constructor " + src + " in " + callerTree.getName());
         }
+
+        ExecutableElement callerElt = TreeUtils.elementFromDeclaration(callerTree);
+        Effect callerEffect = atypeFactory.getDeclaredEffect(callerElt);
 
         Effect targetEffect = new Effect(MayAlloc.class);
-
-        MethodTree callerTree = TreeUtils.enclosingMethod(getCurrentPath());
-        ExecutableElement callerElt = TreeUtils.elementFromDeclaration(callerTree);
-
-        if (callerTree == null) {
-            // XXX: static initializer; need to check for the Alloc effect
-            return super.checkConstructorInvocation(dt, constructor, src);
-        }
-
-        // Sanity check for the caller effect
-        Effect callerEffect = atypeFactory.getDeclaredEffect(callerElt);
-        assert (callerEffect.equals(effects.peek()));
-
+        
         checkEffect(callerEffect, targetEffect, src);
 
         return super.checkConstructorInvocation(dt, constructor, src);
@@ -165,9 +134,10 @@ public final class AllocEffectVisitor extends BaseTypeVisitor<AllocEffectTypeFac
     public Void visitMethod(MethodTree node, Void p) {
         ExecutableElement methElt = TreeUtils.elementFromDeclaration(node);
 
-        if (debugSpew)
+        if (debugSpew){
             System.err.println("\nVisiting method " + methElt);
-
+        }
+            
         AnnotationMirror mayAlloc = atypeFactory.getDeclAnnotation(methElt, MayAlloc.class);
         AnnotationMirror noAlloc = atypeFactory.getDeclAnnotation(methElt, NoAlloc.class);
 
@@ -175,8 +145,7 @@ public final class AllocEffectVisitor extends BaseTypeVisitor<AllocEffectTypeFac
             checker.report(Result.failure("annotations.conflicts"), node);
         }
 
-        @SuppressWarnings("unused")
-        // call has side-effects
+        @SuppressWarnings("unused") // call has side-effects
         Effect.EffectRange range = atypeFactory.findInheritedEffectRange(((TypeElement) methElt.getEnclosingElement()),
                 methElt, true, node);
 
@@ -186,36 +155,6 @@ public final class AllocEffectVisitor extends BaseTypeVisitor<AllocEffectTypeFac
             atypeFactory.fromElement(methElt).addAnnotation(atypeFactory.getDeclaredEffect(methElt).getAnnotation());
         }
 
-        methods.push(node);
-        effects.push(atypeFactory.getDeclaredEffect(methElt));
-
-        if (debugSpew){
-            System.err.println("Pushing " + effects.peek() + " onto the stack when checking " + methElt);
-        }
-            
-        Void ret = super.visitMethod(node, p);
-
-        methods.pop();
-        effects.pop();
-
-        return ret;
-    }
-
-    @Override
-    public Void visitMemberSelect(MemberSelectTree node, Void p) {
-        // TODO: Same effect checks as for methods
-        return super.visitMemberSelect(node, p);
-    }
-
-    @Override
-    public Void visitClass(ClassTree node, Void p) {
-        methods.push(null);
-        effects.push(new Effect(MayAlloc.class));
-
-        Void ret = super.visitClass(node, p);
-
-        methods.pop();
-        effects.pop();
-        return ret;
+        return super.visitMethod(node, p);
     }
 }
