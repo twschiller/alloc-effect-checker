@@ -1,7 +1,7 @@
 alloc-effect-checker
 ====================
 
-An effect system for enforcing allocation patterns. Implemented using the [Checker Framework](http://checkerframework.org).
+An effect system for enforcing memory allocation patterns in Java. Implemented using the [Checker Framework](http://checkerframework.org).
 
 __System Requirements__
 
